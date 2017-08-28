@@ -1,6 +1,6 @@
 from flask import Flask
 from flask_restful import Api
-from views import HelloWorld
+from views import HelloWorld, Crud
 import logging
 
 
@@ -34,4 +34,5 @@ def init_app(application):
 
 def set_resources(api):
     api.add_resource(HelloWorld, '/', '/index')
+    api.add_resource(Crud, '/actions')
     return api
