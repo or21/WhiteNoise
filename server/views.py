@@ -31,7 +31,7 @@ def crud_router(request_form=None):
 
     if action == 'Filter':
         filtered = list(db.data.find({'last name': lastname}))
-        print filtered
+        print(filtered)
         if filtered:
             message = "Filtered by last name - " + lastname
             return make_response(render_template("actions.html", data=filtered, message=message))
