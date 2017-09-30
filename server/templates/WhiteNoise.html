@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WhiteNoise Home page</title>
+</head>
+<body>
+    <form method="post" action="/adwords">
+        Campaign Name (or ID):
+        <input type="text" name="campaign_name"><br>
+        Target ROI:
+        <input type="text" name="roi"><br>
+        Target position:
+        <input type="text" name="target_position"><br>
+        KW Minimum spend for optimization since last bid change:
+        <input type="text" name="kw_minimum"><br>
+        Delicate mode Bid Adj (X and Y):
+        <input type="text" name="delication_mode"><br>
+        Aggressive mode Caps (X and Y):
+        <input type="text" name="aggressive_mode"><br>
+        AVG CPA (cost per acquisition):
+        <input type="text" name="avg_cpa"><br>
+        Output type:
+        <input type="text" name="output_type"><br>
+        Account:
+        <input type="text" name="account"><br>
+        Report frequency (Run Daily/Weekly/Monthly) <br>
+        <input type="radio" name="frequency" value="daily" checked> Daily<br>
+        <input type="radio" name="frequency" value="weekly"> Weekly<br>
+        <input type="radio" name="frequency" value="monthly"> Monthly<br>
+        <br>
+        <input type="submit" value="Submit">
+    </form>
+</body>
+</html>

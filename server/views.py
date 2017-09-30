@@ -1,15 +1,169 @@
-from flask_apispec import MethodResource
+from flask_apispec import MethodResource, use_kwargs, marshal_with
 from flask import make_response, render_template, request
 from pymongo import MongoClient
+from googleads import adwords
+import time
+
 
 client = MongoClient('mongodb://127.0.0.1/')
 db = client.test
+PAGE_SIZE = 100
+campaigns = []
+input_from_user = {}
+
+
+class Campaign:
+    def __init__(self, name, id):
+        self.name = name
+        self.id = id
+        self.adgroups = {}
 
 
 class HelloWorld(MethodResource):
     def get(self):
         data = db.data.find_one({'first name': 'Or'})
         return make_response(render_template("index.html", data=data))
+
+
+class WhiteNoise(MethodResource):
+    def get(self):
+        return make_response(render_template("WhiteNoise.html"))
+
+
+def find_campaigns_data(client):
+    global campaigns
+
+    # Initialize appropriate service.
+    campaign_service = client.GetService('CampaignService', version='v201708')
+
+    # Construct selector and get all campaigns.
+    offset = 0
+    selector = {
+        'fields': ['Id', 'Name', 'Status'],
+        'paging': {
+            'startIndex': str(offset),
+            'numberResults': str(PAGE_SIZE)
+        }
+    }
+
+    more_pages = True
+    while more_pages:
+        page = campaign_service.get(selector)
+
+        # Display results.
+        if 'entries' in page:
+            for campaign in page['entries']:
+                campaigns.append(Campaign(campaign['name'], campaign['id']))
+        else:
+            print('No campaigns were found.')
+        offset += PAGE_SIZE
+        selector['paging']['startIndex'] = str(offset)
+        more_pages = offset < int(page['totalNumEntries'])
+        time.sleep(1)
+    for campaign in campaigns:
+        if "Stocks" in campaign.name:
+            number_of_groups = 30
+            campaign.adgroups = find_adgroup_by_campaign(client, campaign.id)
+            for adgroup in campaign.adgroups.keys():
+                if number_of_groups != 0:
+                    campaign.adgroups[adgroup] = find_kw_by_adgroup_id(client, adgroup)
+                    number_of_groups = number_of_groups - 1
+            break
+
+
+def find_adgroup_by_campaign(client, campaign_id):
+    # Initialize appropriate service.
+    ad_group_service = client.GetService('AdGroupService', version='v201708')
+    ad_groups = {}
+
+    # Construct selector and get all ad groups.
+    offset = 0
+    selector = {
+        'fields': ['Id', 'Name', 'Status'],
+        'predicates': [
+            {
+                'field': 'CampaignId',
+                'operator': 'EQUALS',
+                'values': [campaign_id]
+            }
+        ],
+        'paging': {
+            'startIndex': str(offset),
+            'numberResults': str(PAGE_SIZE)
+        }
+    }
+    more_pages = True
+    while more_pages:
+        page = ad_group_service.get(selector)
+
+        # Display results.
+        if 'entries' in page:
+            for ad_group in page['entries']:
+                ad_groups[str(ad_group['id'])] = {}
+        else:
+            print('No ad groups were found.')
+        offset += PAGE_SIZE
+        selector['paging']['startIndex'] = str(offset)
+        more_pages = offset < int(page['totalNumEntries'])
+    return ad_groups
+
+
+def find_kw_by_adgroup_id(client, adgroup_id):
+    # Initialize appropriate service.
+    ad_group_criterion_service = client.GetService(
+        'AdGroupCriterionService', version='v201708')
+    kws = {}
+
+    # Construct selector and get all ad group criteria.
+    offset = 0
+    selector = {
+        'fields': ['Id', 'CriteriaType', 'KeywordMatchType', 'KeywordText'],
+        'predicates': [
+            {
+                'field': 'AdGroupId',
+                'operator': 'EQUALS',
+                'values': [adgroup_id]
+            },
+            {
+                'field': 'CriteriaType',
+                'operator': 'EQUALS',
+                'values': ['KEYWORD']
+            }
+        ],
+        'paging': {
+            'startIndex': str(offset),
+            'numberResults': str(PAGE_SIZE)
+        },
+        'ordering': [{'field': 'KeywordText', 'sortOrder': 'ASCENDING'}]
+    }
+    more_pages = True
+    while more_pages:
+        page = ad_group_criterion_service.get(selector)
+
+        # Display results.
+        if 'entries' in page:
+            for keyword in page['entries']:
+                kws[keyword['criterion']['text']] = keyword
+        else:
+            print('No keywords were found.')
+        offset += PAGE_SIZE
+        selector['paging']['startIndex'] = str(offset)
+        more_pages = offset < int(page['totalNumEntries'])
+    return kws
+
+
+def make_calculations():
+    return None
+
+
+class AdWords(MethodResource):
+    def post(self):
+        global input_from_user
+        input_from_user = request.values
+        adwords_client = adwords.AdWordsClient.LoadFromStorage("./googleads.yaml")
+        find_campaigns_data(adwords_client)
+        make_calculations()
+        return make_response(render_template("campaigns.html", data=campaigns))
 
 
 class Crud(MethodResource):

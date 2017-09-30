@@ -1,6 +1,6 @@
 from flask import Flask
 from flask_restful import Api
-from views import HelloWorld, Crud
+from server.views import HelloWorld, Crud, AdWords, WhiteNoise
 import logging
 
 
@@ -16,6 +16,7 @@ def create_app():
 
 def init_app(application):
     #Configure global logging
+    # TODO: create log file by script
     logging.basicConfig(
         level=logging.DEBUG,
         format='%(asctime)s:%(levelname)s:%(name)s:%(message)s',
@@ -35,4 +36,6 @@ def init_app(application):
 def set_resources(api):
     api.add_resource(HelloWorld, '/', '/index')
     api.add_resource(Crud, '/actions')
+    api.add_resource(WhiteNoise, '/whitenoise')
+    api.add_resource(AdWords, '/adwords')
     return api

@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Campains</title>
+</head>
+<body>
+     {% for campaign in data %}
+        Campaign name : {{ campaign.name }} <br>
+        AdGroups:    <br>
+        {% for adgroup, kws in campaign.adgroups.items() %}
+            {{ adgroup }} <br>
+            KWS: <br>
+            {% for kw in kws.keys() %}
+                {{ kw }} <br>
+            {% endfor %}
+        {% endfor %}
+    {% endfor %}
+</body>
+</html>
