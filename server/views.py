@@ -3,6 +3,9 @@ from flask import make_response, render_template, request
 from pymongo import MongoClient
 from googleads import adwords
 import time
+import sys
+import csv
+import json
 
 
 client = MongoClient('mongodb://127.0.0.1/')
@@ -62,7 +65,7 @@ def find_campaigns_data(client):
         time.sleep(1)
     for campaign in campaigns:
         if "Stocks" in campaign.name:
-            number_of_groups = 30
+            number_of_groups = 1
             campaign.adgroups = find_adgroup_by_campaign(client, campaign.id)
             for adgroup in campaign.adgroups.keys():
                 if number_of_groups != 0:
@@ -117,7 +120,7 @@ def find_kw_by_adgroup_id(client, adgroup_id):
     # Construct selector and get all ad group criteria.
     offset = 0
     selector = {
-        'fields': ['Id', 'CriteriaType', 'KeywordMatchType', 'KeywordText'],
+        'fields': ['Id', 'CriteriaType', 'KeywordMatchType', 'KeywordText', 'impression'],
         'predicates': [
             {
                 'field': 'AdGroupId',
@@ -142,6 +145,7 @@ def find_kw_by_adgroup_id(client, adgroup_id):
 
         # Display results.
         if 'entries' in page:
+            print page
             for keyword in page['entries']:
                 kws[keyword['criterion']['text']] = keyword
         else:
@@ -156,14 +160,50 @@ def make_calculations():
     return None
 
 
+def get_report(client):
+    report_downloader = client.GetReportDownloader(version='v201708')
+
+    report = {
+        'reportName': 'Last 7 days CRITERIA_PERFORMANCE_REPORT',
+        'dateRangeType': 'LAST_7_DAYS',
+        'reportType': 'CRITERIA_PERFORMANCE_REPORT',
+        'downloadFormat': 'CSV',
+        'selector': {
+            'fields': ['CampaignId', 'AdGroupId', 'Id', 'CriteriaType',
+                       'Criteria', 'FinalUrls', 'Impressions', 'Clicks', 'Cost']
+        }
+    }
+
+    # You can provide a file object to write the output to. For this demonstration
+    # we use sys.stdout to write the report to the screen.
+    with open('./report.txt', mode='w') as infile:
+        report_downloader.DownloadReport(
+            report, infile, skip_report_header=False, skip_column_header=False,
+            skip_report_summary=False, include_zero_impressions=True)
+    in_txt = csv.reader(open('./report.txt'), delimiter=',')
+    out_csv = csv.writer(open('./report.csv', 'wb'))
+
+    out_csv.writerows(in_txt)
+
+
+def csv_to_json(csv_name):
+    with open(csv_name, mode='r') as infile:
+        reader = csv.reader(infile)
+        with open('./report_new.csv', mode='w') as outfile:
+            writer = csv.writer(outfile)
+            mydict = {rows[0]: rows[1] for rows in reader}
+    return mydict
+
+
 class AdWords(MethodResource):
     def post(self):
         global input_from_user
         input_from_user = request.values
         adwords_client = adwords.AdWordsClient.LoadFromStorage("./googleads.yaml")
-        find_campaigns_data(adwords_client)
-        make_calculations()
-        return make_response(render_template("campaigns.html", data=campaigns))
+        get_report(adwords_client)
+        # find_campaigns_data(adwords_client)
+        # make_calculations()
+        return make_response(render_template("campaigns.html", data=json.dumps(csv_to_json('./report.csv'))))
 
 
 class Crud(MethodResource):

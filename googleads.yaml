@@ -44,7 +44,7 @@ adwords:
 # Below you may specify whether to accept and automatically decompress gzip   #
 # encoded SOAP requests. By default, gzip compression is not enabled.         #
 ###############################################################################
-# enable_compression: False
+# enable_compression: True
 ###############################################################################
 # Logging configuration (optional)                                            #
 # Below you may specify the logging configuration. This will be provided as   #
