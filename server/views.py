@@ -2,24 +2,29 @@ from flask_apispec import MethodResource, use_kwargs, marshal_with
 from flask import make_response, render_template, request
 from pymongo import MongoClient
 from googleads import adwords
-import time
-import sys
+import os
 import csv
-import json
 
 
 client = MongoClient('mongodb://127.0.0.1/')
 db = client.test
 PAGE_SIZE = 100
 campaigns = []
-input_from_user = {}
+input_from_user = {
+    'campaign_name': "[S] Shares - NL",
+    'target_roi': 150,
+    'target_position': 2.0,
+    'kw_min_spent': 1,
+    'delicate_mode_bid_adj': "7, 15",
+    'aggressive_mode_caps': "15, 30",
+    'avg_cpa': 3,
+    'output_type': "",
+    'account': "",
+    'report_frequency': ""
+}
 
-
-class Campaign:
-    def __init__(self, name, id):
-        self.name = name
-        self.id = id
-        self.adgroups = {}
+kws = []
+kws_to_change = []
 
 
 class HelloWorld(MethodResource):
@@ -33,177 +38,114 @@ class WhiteNoise(MethodResource):
         return make_response(render_template("WhiteNoise.html"))
 
 
-def find_campaigns_data(client):
-    global campaigns
-
-    # Initialize appropriate service.
-    campaign_service = client.GetService('CampaignService', version='v201708')
-
-    # Construct selector and get all campaigns.
-    offset = 0
-    selector = {
-        'fields': ['Id', 'Name', 'Status'],
-        'paging': {
-            'startIndex': str(offset),
-            'numberResults': str(PAGE_SIZE)
-        }
-    }
-
-    more_pages = True
-    while more_pages:
-        page = campaign_service.get(selector)
-
-        # Display results.
-        if 'entries' in page:
-            for campaign in page['entries']:
-                campaigns.append(Campaign(campaign['name'], campaign['id']))
+def calc_bid_change(mode, roi, avg_position):
+    values_change_to = input_from_user['delicate_mode_bid_adj']
+    if mode == 'aggressive':
+        calculated_change = ((roi / float(input_from_user['target_roi'])) - 1) / 1.5
+        if calculated_change > float(input_from_user['aggressive_mode_caps'][0]):
+            x = input_from_user['aggressive_mode_caps'][0]
         else:
-            print('No campaigns were found.')
-        offset += PAGE_SIZE
-        selector['paging']['startIndex'] = str(offset)
-        more_pages = offset < int(page['totalNumEntries'])
-        time.sleep(1)
-    for campaign in campaigns:
-        if "Stocks" in campaign.name:
-            number_of_groups = 1
-            campaign.adgroups = find_adgroup_by_campaign(client, campaign.id)
-            for adgroup in campaign.adgroups.keys():
-                if number_of_groups != 0:
-                    campaign.adgroups[adgroup] = find_kw_by_adgroup_id(client, adgroup)
-                    number_of_groups = number_of_groups - 1
-            break
-
-
-def find_adgroup_by_campaign(client, campaign_id):
-    # Initialize appropriate service.
-    ad_group_service = client.GetService('AdGroupService', version='v201708')
-    ad_groups = {}
-
-    # Construct selector and get all ad groups.
-    offset = 0
-    selector = {
-        'fields': ['Id', 'Name', 'Status'],
-        'predicates': [
-            {
-                'field': 'CampaignId',
-                'operator': 'EQUALS',
-                'values': [campaign_id]
-            }
-        ],
-        'paging': {
-            'startIndex': str(offset),
-            'numberResults': str(PAGE_SIZE)
-        }
-    }
-    more_pages = True
-    while more_pages:
-        page = ad_group_service.get(selector)
-
-        # Display results.
-        if 'entries' in page:
-            for ad_group in page['entries']:
-                ad_groups[str(ad_group['id'])] = {}
+            x = calculated_change
+        if calculated_change > float(input_from_user['aggressive_mode_caps'][1]):
+            y = input_from_user['aggressive_mode_caps'][1]
         else:
-            print('No ad groups were found.')
-        offset += PAGE_SIZE
-        selector['paging']['startIndex'] = str(offset)
-        more_pages = offset < int(page['totalNumEntries'])
-    return ad_groups
+            y = calculated_change
+        values_change_to = (x, y)
+
+    if roi > input_from_user['target_roi'] and avg_position > input_from_user['target_position']:
+        return values_change_to[0]
+    if roi > input_from_user['target_roi'] and avg_position <= input_from_user['target_position']:
+        return values_change_to[1]
+    if roi <= input_from_user['target_roi'] and avg_position > input_from_user['target_position']:
+        return values_change_to[0] * -1
+    if roi <= input_from_user['target_roi'] and avg_position <= input_from_user['target_position']:
+        return values_change_to[1] * -1
 
 
-def find_kw_by_adgroup_id(client, adgroup_id):
-    # Initialize appropriate service.
-    ad_group_criterion_service = client.GetService(
-        'AdGroupCriterionService', version='v201708')
-    kws = {}
+def create_keywords_report_data():
+    global kws_to_change
+    kws_to_change = []
+    input_from_user['target_roi'] = float(input_from_user['target_roi'])
+    input_from_user['target_position'] = float(input_from_user['target_position'])
+    input_from_user['kw_min_spent'] = float(input_from_user['kw_min_spent'])
+    input_from_user['avg_cpa'] = float(input_from_user['avg_cpa'])
+    input_from_user['delicate_mode_bid_adj'] = (float(input_from_user['delicate_mode_bid_adj'].split(',')[0]),
+                                                float(input_from_user['delicate_mode_bid_adj'].split(',')[1]))
+    input_from_user['aggressive_mode_caps'] = (float(input_from_user['aggressive_mode_caps'].split(',')[0]),
+                                               float(input_from_user['aggressive_mode_caps'].split(',')[1]))
 
-    # Construct selector and get all ad group criteria.
-    offset = 0
-    selector = {
-        'fields': ['Id', 'CriteriaType', 'KeywordMatchType', 'KeywordText', 'impression'],
-        'predicates': [
-            {
-                'field': 'AdGroupId',
-                'operator': 'EQUALS',
-                'values': [adgroup_id]
-            },
-            {
-                'field': 'CriteriaType',
-                'operator': 'EQUALS',
-                'values': ['KEYWORD']
-            }
-        ],
-        'paging': {
-            'startIndex': str(offset),
-            'numberResults': str(PAGE_SIZE)
-        },
-        'ordering': [{'field': 'KeywordText', 'sortOrder': 'ASCENDING'}]
-    }
-    more_pages = True
-    while more_pages:
-        page = ad_group_criterion_service.get(selector)
+    for kw in kws:
+        if kw['Cost'] and kw['Cost'].isdigit() and float(kw['Cost']) != 0:
+            kw_roi = float(kw['All conv. value']) / (float(kw['Cost']) / 1000000)
+            roi_min = input_from_user['target_roi'] - input_from_user['target_roi'] * 0.1
+            roi_max = input_from_user['target_roi'] + input_from_user['target_roi'] * 0.1
+            if roi_max > kw_roi > roi_min:
+                continue
+            if (float(kw['Cost']) / 1000000) < input_from_user['kw_min_spent']:
+                continue
+            if 1.5 > float(kw['Avg. position']) > 1 and kw_roi > input_from_user['target_roi']:
+                continue
 
-        # Display results.
-        if 'entries' in page:
-            print page
-            for keyword in page['entries']:
-                kws[keyword['criterion']['text']] = keyword
-        else:
-            print('No keywords were found.')
-        offset += PAGE_SIZE
-        selector['paging']['startIndex'] = str(offset)
-        more_pages = offset < int(page['totalNumEntries'])
-    return kws
+            if float(kw['Cost']) > (3 * input_from_user['avg_cpa']):
+                selected_mode = "aggressive"
+            else:
+                selected_mode = "delicate"
 
-
-def make_calculations():
-    return None
+            bid_change = float(calc_bid_change(selected_mode, kw_roi, float(kw['Avg. position'])))
+            keyword_match_type = kw['Match type']
+            kws_to_change.append([input_from_user['campaign_name'], kw['Ad group'], kw['Keyword'], keyword_match_type,
+                                  float(kw['Cost']) / 1000000, kw['Avg. position'], kw_roi, input_from_user['target_roi'],
+                                  round((float(kw['Max. CPC']) / 1000000), 2), bid_change,
+                                  round((float(kw['Max. CPC']) / 1000000) + ((float(kw['Max. CPC']) / 1000000) * (round(bid_change, 2) / 100)), 2)])
 
 
 def get_report(client):
+    global kws
+    kws = []
     report_downloader = client.GetReportDownloader(version='v201708')
 
     report = {
-        'reportName': 'Last 7 days CRITERIA_PERFORMANCE_REPORT',
-        'dateRangeType': 'LAST_7_DAYS',
-        'reportType': 'CRITERIA_PERFORMANCE_REPORT',
+        'reportName': 'Last 7 days KEYWORDS_PERFORMANCE_REPORT',
+        'dateRangeType': 'LAST_MONTH',
+        'reportType': 'KEYWORDS_PERFORMANCE_REPORT',
         'downloadFormat': 'CSV',
         'selector': {
-            'fields': ['CampaignId', 'AdGroupId', 'Id', 'CriteriaType',
-                       'Criteria', 'FinalUrls', 'Impressions', 'Clicks', 'Cost']
+            'fields': ['CampaignId', 'CampaignName', 'AdGroupId', 'AdGroupName', 'Id', 'CpcBid', 'KeywordMatchType',
+                       'Criteria', 'AveragePosition', 'Cost', 'AllConversionValue'],
+            'predicates': {
+                'field': 'CampaignName',
+                'operator': 'EQUALS',
+                'values': [input_from_user['campaign_name']]
+            }
         }
     }
 
-    # You can provide a file object to write the output to. For this demonstration
-    # we use sys.stdout to write the report to the screen.
     with open('./report.txt', mode='w') as infile:
         report_downloader.DownloadReport(
-            report, infile, skip_report_header=False, skip_column_header=False,
-            skip_report_summary=False, include_zero_impressions=True)
+            report, infile, skip_report_header=True, skip_column_header=False,
+            skip_report_summary=True, include_zero_impressions=True)
     in_txt = csv.reader(open('./report.txt'), delimiter=',')
     out_csv = csv.writer(open('./report.csv', 'wb'))
-
     out_csv.writerows(in_txt)
+    with open('./report.csv', mode='r') as data:
+        reader = csv.DictReader(data)
+        for row in reader:
+            kws.append(row)
 
 
-def csv_to_json(csv_name):
-    with open(csv_name, mode='r') as infile:
-        reader = csv.reader(infile)
-        with open('./report_new.csv', mode='w') as outfile:
-            writer = csv.writer(outfile)
-            mydict = {rows[0]: rows[1] for rows in reader}
-    return mydict
-
-
-class AdWords(MethodResource):
+class KeywordsSuggestions(MethodResource):
     def post(self):
         global input_from_user
-        input_from_user = request.values
+        for key in request.values.keys():
+            if key in input_from_user.keys() and request.values[key] != "":
+                input_from_user[key] = request.values[key]
+
         adwords_client = adwords.AdWordsClient.LoadFromStorage("./googleads.yaml")
         get_report(adwords_client)
-        # find_campaigns_data(adwords_client)
-        # make_calculations()
-        return make_response(render_template("campaigns.html", data=json.dumps(csv_to_json('./report.csv'))))
+        create_keywords_report_data()
+        os.remove('./report.txt')
+        os.remove('./report.csv')
+        return make_response(render_template("Keywords_data_output.html", kws_to_change=kws_to_change))
 
 
 class Crud(MethodResource):

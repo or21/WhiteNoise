@@ -1,6 +1,6 @@
 from flask import Flask
 from flask_restful import Api
-from server.views import HelloWorld, Crud, AdWords, WhiteNoise
+from server.views import HelloWorld, Crud, KeywordsSuggestions, WhiteNoise
 import logging
 
 
@@ -37,5 +37,5 @@ def set_resources(api):
     api.add_resource(HelloWorld, '/', '/index')
     api.add_resource(Crud, '/actions')
     api.add_resource(WhiteNoise, '/whitenoise')
-    api.add_resource(AdWords, '/adwords')
+    api.add_resource(KeywordsSuggestions, '/suggestions')
     return api

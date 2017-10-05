@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Keywords suggestions</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+</head>
+<body>
+<button id="btnExport">Export to xls</button>
+<div id="table_wrapper">
+    <br>
+    <table border="1" cellspacing="0" id="list">
+        <tr class="header">
+            <th>Campaign Name</th>
+            <th>Ad Group Name</th>
+            <th>Keyword</th>
+            <th>Match Type</th>
+            <th>Cost/Spend</th>
+            <th>Avg. position</th>
+            <th>Keyword ROI</th>
+            <th>Target ROI</th>
+            <th>Old Bid</th>
+            <th>Bid Change</th>
+            <th>Suggested Bid</th>
+        </tr>
+        <tbody>
+        {% for kw in kws_to_change %}
+        <tr>
+            {% for data in kw %}
+            <td>{{ data }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+<script>
+    $(document).ready(function() {
+        $("#btnExport").click(function(e) {
+        e.preventDefault();
+
+        //getting data from our table
+        var data_type = 'data:application/vnd.ms-excel';
+        var table_div = document.getElementById('table_wrapper');
+        var table_html = table_div.outerHTML.replace(/ /g, '%20');
+
+        var a = document.createElement('a');
+        a.href = data_type + ', ' + table_html;
+        var campaign_name = "{{ kws_to_change[0][0] | string() }}";
+        var currentdate = new Date();
+        var datetime = "_" + currentdate.getDate() + "_"
+                + (currentdate.getMonth()+1)  + "_"
+                + currentdate.getFullYear() + "_"
+                + currentdate.getHours() + "_"
+                + currentdate.getMinutes() + "_"
+                + currentdate.getSeconds() + "_";
+        a.download = 'Keywords_report_' + campaign_name + datetime + '.xls';
+        a.click();
+      });
+    });
+
+</script>
+</body>
+</html>

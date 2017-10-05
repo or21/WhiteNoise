@@ -5,29 +5,30 @@
     <title>WhiteNoise Home page</title>
 </head>
 <body>
-    <form method="post" action="/adwords">
+    <form method="post" action="/suggestions">
         Campaign Name (or ID):
         <input type="text" name="campaign_name"><br>
         Target ROI:
-        <input type="text" name="roi"><br>
+        <input type="text" name="target_roi"><br>
         Target position:
         <input type="text" name="target_position"><br>
         KW Minimum spend for optimization since last bid change:
-        <input type="text" name="kw_minimum"><br>
+        <input type="text" name="kw_min_spent"><br>
         Delicate mode Bid Adj (X and Y):
-        <input type="text" name="delication_mode"><br>
+        <input type="text" name="delicate_mode_bid_adj"><br>
         Aggressive mode Caps (X and Y):
-        <input type="text" name="aggressive_mode"><br>
+        <input type="text" name="aggressive_mode_caps"><br>
         AVG CPA (cost per acquisition):
         <input type="text" name="avg_cpa"><br>
-        Output type:
-        <input type="text" name="output_type"><br>
+        Output type:<br>
+        <input type="radio" name="output_type" value="report" checked> Report only<br>
+        <input type="radio" name="output_type" value="execution_and_report"> Exaction + Report<br>
         Account:
         <input type="text" name="account"><br>
         Report frequency (Run Daily/Weekly/Monthly) <br>
-        <input type="radio" name="frequency" value="daily" checked> Daily<br>
-        <input type="radio" name="frequency" value="weekly"> Weekly<br>
-        <input type="radio" name="frequency" value="monthly"> Monthly<br>
+        <input type="radio" name="report_frequency" value="daily" checked> Daily<br>
+        <input type="radio" name="report_frequency" value="weekly"> Weekly<br>
+        <input type="radio" name="report_frequency" value="monthly"> Monthly<br>
         <br>
         <input type="submit" value="Submit">
     </form>
