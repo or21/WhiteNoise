@@ -1,15 +1,25 @@
 from flask_apispec import MethodResource, use_kwargs, marshal_with
 from flask import make_response, render_template, request
-from pymongo import MongoClient
+import psycopg2
 from googleads import adwords
 import os
 import csv
 
 
-client = MongoClient('mongodb://127.0.0.1/')
-db = client.test
+def db_connect():
+    try:
+        conn_string = "host='localhost' dbname='WhiteNoise' user='postgres' password='Aa123456' port=5000"
+        print("Connecting to database\n	->%s" % conn_string)
+        conn = psycopg2.connect(conn_string)
+        return conn
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
+
+
 PAGE_SIZE = 100
-campaigns = []
+kws = []
+kws_to_change = []
 input_from_user = {
     'campaign_name': "[S] Shares - NL",
     'target_roi': 150,
@@ -22,15 +32,6 @@ input_from_user = {
     'account': "",
     'report_frequency': ""
 }
-
-kws = []
-kws_to_change = []
-
-
-class HelloWorld(MethodResource):
-    def get(self):
-        data = db.data.find_one({'first name': 'Or'})
-        return make_response(render_template("index.html", data=data))
 
 
 class WhiteNoise(MethodResource):
@@ -52,14 +53,16 @@ def calc_bid_change(mode, roi, avg_position):
             y = calculated_change
         values_change_to = (x, y)
 
-    if roi > input_from_user['target_roi'] and avg_position > input_from_user['target_position']:
-        return values_change_to[0]
-    if roi > input_from_user['target_roi'] and avg_position <= input_from_user['target_position']:
-        return values_change_to[1]
-    if roi <= input_from_user['target_roi'] and avg_position > input_from_user['target_position']:
-        return values_change_to[0] * -1
-    if roi <= input_from_user['target_roi'] and avg_position <= input_from_user['target_position']:
-        return values_change_to[1] * -1
+    if roi > input_from_user['target_roi']:
+        if avg_position > input_from_user['target_position']:
+            return values_change_to[0]
+        else:
+            return values_change_to[1]
+    else:
+        if avg_position > input_from_user['target_position']:
+            return values_change_to[0] * -1
+        else:
+            return values_change_to[1] * -1
 
 
 def create_keywords_report_data():
@@ -93,7 +96,7 @@ def create_keywords_report_data():
 
             bid_change = float(calc_bid_change(selected_mode, kw_roi, float(kw['Avg. position'])))
             keyword_match_type = kw['Match type']
-            kws_to_change.append([input_from_user['campaign_name'], kw['Ad group'], kw['Keyword'], keyword_match_type,
+            kws_to_change.append([input_from_user['campaign_name'], kw['Ad group'], kw['Keyword'], kw['Keyword ID'], keyword_match_type,
                                   float(kw['Cost']) / 1000000, kw['Avg. position'], kw_roi, input_from_user['target_roi'],
                                   round((float(kw['Max. CPC']) / 1000000), 2), bid_change,
                                   round((float(kw['Max. CPC']) / 1000000) + ((float(kw['Max. CPC']) / 1000000) * (round(bid_change, 2) / 100)), 2)])
@@ -133,72 +136,23 @@ def get_report(client):
             kws.append(row)
 
 
-class KeywordsSuggestions(MethodResource):
+class KeywordsBidSuggestions(MethodResource):
     def post(self):
         global input_from_user
         for key in request.values.keys():
             if key in input_from_user.keys() and request.values[key] != "":
                 input_from_user[key] = request.values[key]
-
         adwords_client = adwords.AdWordsClient.LoadFromStorage("./googleads.yaml")
         get_report(adwords_client)
         create_keywords_report_data()
         os.remove('./report.txt')
         os.remove('./report.csv')
+        conn = db_connect()
+        db_cursor = conn.cursor()
+        for kw in kws_to_change:
+            command = "INSERT INTO keywords(kw_id, kw_name, campaign_name, last_change) VALUES('%s', '%s', '%s', '%s')" % (str(kw[3]), str(kw[2]), str(kw[0]), "2017-10-07")
+            print command
+            db_cursor.execute(command)
+            conn.commit()
+        db_cursor.close()
         return make_response(render_template("Keywords_data_output.html", kws_to_change=kws_to_change))
-
-
-class Crud(MethodResource):
-    def get(self):
-        return crud_router()
-
-    def post(self):
-        return crud_router(request)
-
-
-def crud_router(request_form=None):
-    message = "Please fill the form"
-    if request_form:
-        action = request_form.form['action']
-        firstname = request_form.form['firstname']
-        lastname = request_form.form['lastname']
-    else:
-        action = ""
-
-    if action == 'Filter':
-        filtered = list(db.data.find({'last name': lastname}))
-        print(filtered)
-        if filtered:
-            message = "Filtered by last name - " + lastname
-            return make_response(render_template("actions.html", data=filtered, message=message))
-        else:
-            message = "Could not find instance. Reminder - you can only filter by last name"
-
-    if action == 'Add':
-        if db.data.find_one({'first name': firstname}):
-            message = "There is already instance with first name  " + firstname
-        else:
-            message += "Inserted " + firstname + " " + lastname
-            db.data.insert_one({'first name': firstname, 'last name': lastname})
-
-    if action == 'Update':
-        element = db.data.find_one({'first name': firstname})
-        if list(element):
-            if element['last name'] == lastname:
-                message = "Nothing to update"
-            else:
-                message = "Updated " + firstname + " last name to: " + lastname
-                db.data.update_one({'first name': firstname},
-                                   {'$set': {'first name': firstname, 'last name': lastname}})
-        else:
-            message = "Could not update. No instance for first name " + firstname
-
-    if action == 'Delete':
-        if db.data.find_one({'first name': firstname}):
-            message = "Delete where first name is " + firstname
-            db.data.delete_one({'first name': firstname})
-        else:
-            message = "Could not delete. No instance with first name " + firstname
-
-    data = list(db.data.find({}))
-    return make_response(render_template("actions.html", data=data, message=message))
