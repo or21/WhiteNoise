@@ -4,19 +4,19 @@ import psycopg2
 from googleads import adwords
 import os
 import csv
+import datetime
 
 
 def db_connect():
     try:
         conn_string = "host='localhost' dbname='WhiteNoise' user='postgres' password='Aa123456' port=5000"
         print("Connecting to database\n	->%s" % conn_string)
-        conn = psycopg2.connect(conn_string)
-        return conn
+        return psycopg2.connect(conn_string)
 
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
 
-
+conn = db_connect()
 PAGE_SIZE = 100
 kws = []
 kws_to_change = []
@@ -32,11 +32,39 @@ input_from_user = {
     'account': "",
     'report_frequency': ""
 }
+db_dependency = {
+    'above': [],
+    'below': []
+}
+campaign_avg_position = ""
+
+
+class Keyword:
+    def __init__(self, ad_group, name, kw_id, cost, avg_position, max_cpc, match_type, all_conv, impressions):
+        self.ad_group = ad_group
+        self.name = name
+        self.id = kw_id
+        self.match_type = match_type
+        self.cost = cost
+        self.avg_position = avg_position
+        self.roi = ""
+        self.max_cpc = max_cpc
+        self.bid_change = ""
+        self.all_conv_value = all_conv
+        self.impressions = impressions
 
 
 class WhiteNoise(MethodResource):
     def get(self):
         return make_response(render_template("WhiteNoise.html"))
+
+
+def select_from_db(keyword_id):
+    command = "SELECT * FROM keywords where kw_id = '{}'".format(keyword_id)
+    db_cursor = conn.cursor()
+    db_cursor.execute(command)
+    rows = db_cursor.fetchall()
+    return rows
 
 
 def calc_bid_change(mode, roi, avg_position):
@@ -66,7 +94,7 @@ def calc_bid_change(mode, roi, avg_position):
 
 
 def create_keywords_report_data():
-    global kws_to_change
+    global kws_to_change, db_dependency, kws
     kws_to_change = []
     input_from_user['target_roi'] = float(input_from_user['target_roi'])
     input_from_user['target_position'] = float(input_from_user['target_position'])
@@ -77,32 +105,64 @@ def create_keywords_report_data():
     input_from_user['aggressive_mode_caps'] = (float(input_from_user['aggressive_mode_caps'].split(',')[0]),
                                                float(input_from_user['aggressive_mode_caps'].split(',')[1]))
 
-    for kw in kws:
-        if kw['Cost'] and kw['Cost'].isdigit() and float(kw['Cost']) != 0:
-            kw_roi = float(kw['All conv. value']) / (float(kw['Cost']) / 1000000)
+    for kw_all in kws:
+        kw = Keyword(kw_all['Ad group'], kw_all['Keyword'], kw_all['Keyword ID'], kw_all['Cost'],
+                     kw_all['Avg. position'], kw_all['Max. CPC'], kw_all['Match type'], kw_all['All conv. value'],
+                     kw_all['Impressions'])
+        if kw.cost and kw.cost.isdigit() and float(kw.cost) != 0 and kw.avg_position and kw.max_cpc:
+            kw.cost = float(kw.cost)
+            kw.avg_position = float(kw.avg_position)
+            kw.max_cpc = float(kw.max_cpc)
+            kw.roi = float(kw.all_conv_value) / (kw.cost / 1000000)
             roi_min = input_from_user['target_roi'] - input_from_user['target_roi'] * 0.1
             roi_max = input_from_user['target_roi'] + input_from_user['target_roi'] * 0.1
-            if roi_max > kw_roi > roi_min:
+            if roi_max > kw.roi > roi_min:
                 continue
-            if (float(kw['Cost']) / 1000000) < input_from_user['kw_min_spent']:
+            if (kw.cost / 1000000) < input_from_user['kw_min_spent']:
                 continue
-            if 1.5 > float(kw['Avg. position']) > 1 and kw_roi > input_from_user['target_roi']:
+            if 1.5 > kw.avg_position > 1.0 and kw.roi > input_from_user['target_roi']:
                 continue
 
-            if float(kw['Cost']) > (3 * input_from_user['avg_cpa']):
+            if kw.cost > (3 * input_from_user['avg_cpa']):
                 selected_mode = "aggressive"
             else:
                 selected_mode = "delicate"
 
-            bid_change = float(calc_bid_change(selected_mode, kw_roi, float(kw['Avg. position'])))
-            keyword_match_type = kw['Match type']
-            kws_to_change.append([input_from_user['campaign_name'], kw['Ad group'], kw['Keyword'], kw['Keyword ID'], keyword_match_type,
-                                  float(kw['Cost']) / 1000000, kw['Avg. position'], kw_roi, input_from_user['target_roi'],
-                                  round((float(kw['Max. CPC']) / 1000000), 2), bid_change,
-                                  round((float(kw['Max. CPC']) / 1000000) + ((float(kw['Max. CPC']) / 1000000) * (round(bid_change, 2) / 100)), 2)])
+            kw.bid_change = float(calc_bid_change(selected_mode, kw.roi, kw.avg_position))
+            kws_to_change.append(kw)
+        else:
+            kw_db_data = select_from_db(kw.id)
+            if len(kw_db_data) > 0:
+                kw_db_time = datetime.datetime.combine(kw_db_data[0][1], datetime.time.min)
+                now = datetime.datetime.now()
+                date_1 = datetime.datetime.strptime(now.strftime("%m/%d/%y"), "%m/%d/%y")
+                end_date = date_1 + datetime.timedelta(days=-7)
+                if kw_db_time < end_date:
+                    if kw.avg_position < campaign_avg_position:
+                        db_dependency['below'].append(kw)
+                    else:
+                        db_dependency['above'].append(kw)
+    for location, kws in db_dependency.iteritems():
+        all_cost = sum([kw.cost for kw in kws])
+        if all_cost > 0:
+            all_kw_roi = sum([kw.all_conv_value for kw in kws]) / all_cost
+        else:
+            all_kw_roi = 0
+        all_impressions = sum([kw.impression for kw in kws])
+        if all_impressions > 0:
+            all_position = sum([kw.impressions * kw.avg_position for kw in kws])
+        else:
+            all_position = 0
+        if all_cost > (3 * input_from_user['avg_cpa']):
+            selected_mode = "aggressive"
+        else:
+            selected_mode = "delicate"
+        group_bid_change = calc_bid_change(selected_mode, all_kw_roi, all_position)
+        for kw in kws:
+            kw.bid_change = group_bid_change
 
 
-def get_report(client):
+def get_kw_perf_report(client):
     global kws
     kws = []
     report_downloader = client.GetReportDownloader(version='v201708')
@@ -114,7 +174,7 @@ def get_report(client):
         'downloadFormat': 'CSV',
         'selector': {
             'fields': ['CampaignId', 'CampaignName', 'AdGroupId', 'AdGroupName', 'Id', 'CpcBid', 'KeywordMatchType',
-                       'Criteria', 'AveragePosition', 'Cost', 'AllConversionValue'],
+                       'Criteria', 'AveragePosition', 'Cost', 'AllConversionValue', 'Impressions'],
             'predicates': {
                 'field': 'CampaignName',
                 'operator': 'EQUALS',
@@ -136,23 +196,57 @@ def get_report(client):
             kws.append(row)
 
 
+def get_campaign_avg_position_report(client):
+    report_downloader = client.GetReportDownloader(version='v201708')
+
+    report = {
+        'reportName': 'Last 7 days CAMPAIGN_PERFORMANCE_REPORT',
+        'dateRangeType': 'LAST_MONTH',
+        'reportType': 'CAMPAIGN_PERFORMANCE_REPORT',
+        'downloadFormat': 'CSV',
+        'selector': {
+            'fields': ['AveragePosition'],
+            'predicates': {
+                'field': 'CampaignName',
+                'operator': 'EQUALS',
+                'values': [input_from_user['campaign_name']]
+            }
+        }
+    }
+
+    a = report_downloader.DownloadReportAsString(
+            report, skip_report_header=True, skip_column_header=True,
+            skip_report_summary=True, include_zero_impressions=True)
+    return a.split('\n')[0]
+
+
 class KeywordsBidSuggestions(MethodResource):
     def post(self):
-        global input_from_user
+        global input_from_user, campaign_avg_position
         for key in request.values.keys():
             if key in input_from_user.keys() and request.values[key] != "":
                 input_from_user[key] = request.values[key]
         adwords_client = adwords.AdWordsClient.LoadFromStorage("./googleads.yaml")
-        get_report(adwords_client)
+        get_kw_perf_report(adwords_client)
+        campaign_avg_position = get_campaign_avg_position_report(adwords_client)
         create_keywords_report_data()
         os.remove('./report.txt')
         os.remove('./report.csv')
-        conn = db_connect()
         db_cursor = conn.cursor()
         for kw in kws_to_change:
             command = "INSERT INTO keywords(kw_id, kw_name, campaign_name, last_change) VALUES('%s', '%s', '%s', '%s')" % (str(kw[3]), str(kw[2]), str(kw[0]), "2017-10-07")
-            print command
+            db_cursor.execute(command)
+            conn.commit()
+        for kw in db_dependency:
+            command = "INSERT INTO keywords(kw_id, kw_name, campaign_name, last_change) VALUES('%s', '%s', '%s', '%s')" % (str(kw[3]), str(kw[2]), str(kw[0]), "2017-10-07")
             db_cursor.execute(command)
             conn.commit()
         db_cursor.close()
-        return make_response(render_template("Keywords_data_output.html", kws_to_change=kws_to_change))
+        conn.close()
+        return_data = []
+        for kw_data in kws_to_change + db_dependency['above'] + db_dependency['below']:
+            return_data.append([input_from_user['campaign_name'], kw_data.ad_group, kw_data.name, kw_data.id,
+                                kw_data.match_type, kw_data.cost / 1000000, kw_data.avg_position, kw_data.roi,
+                                input_from_user['target_roi'], round((kw_data.max_cpc / 1000000), 2), kw_data.bid_change,
+                                round(((kw_data.max_cpc / 1000000) + (kw_data.max_cpc / 1000000) * (round(kw_data.bid_change, 2) / 100)), 2)])
+        return make_response(render_template("Keywords_data_output.html", kws_to_change=return_data))
