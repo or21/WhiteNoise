@@ -5,16 +5,18 @@ from googleads import adwords
 import os
 import csv
 import datetime
+from dateutil.relativedelta import relativedelta
 
 
 def db_connect():
     try:
         conn_string = "host='localhost' dbname='WhiteNoise' user='postgres' password='Aa123456' port=5000"
-        print("Connecting to database\n	->%s" % conn_string)
+        print("Connecting to database\n	{}".format(conn_string))
         return psycopg2.connect(conn_string)
 
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
+
 
 conn = db_connect()
 PAGE_SIZE = 100
@@ -44,14 +46,14 @@ class Keyword:
         self.ad_group = ad_group
         self.name = name
         self.id = kw_id
-        self.match_type = match_type
         self.cost = cost
         self.avg_position = avg_position
-        self.roi = ""
         self.max_cpc = max_cpc
-        self.bid_change = ""
+        self.match_type = match_type
         self.all_conv_value = all_conv
         self.impressions = impressions
+        self.roi = ""
+        self.bid_change = ""
 
 
 class WhiteNoise(MethodResource):
@@ -136,12 +138,19 @@ def create_keywords_report_data():
                 kw_db_time = datetime.datetime.combine(kw_db_data[0][1], datetime.time.min)
                 now = datetime.datetime.now()
                 date_1 = datetime.datetime.strptime(now.strftime("%m/%d/%y"), "%m/%d/%y")
-                end_date = date_1 + datetime.timedelta(days=-7)
+                if input_from_user['report_frequency'] == 'daily':
+                    end_date = date_1 + datetime.timedelta(days=-1)
+                elif input_from_user['report_frequency'] == 'weekly':
+                    end_date = date_1 + datetime.timedelta(days=-7)
+                else:
+                    end_date = date_1 + relativedelta(months=-1)
+
                 if kw_db_time < end_date:
                     if kw.avg_position < campaign_avg_position:
                         db_dependency['below'].append(kw)
                     else:
                         db_dependency['above'].append(kw)
+
     for location, kws in db_dependency.iteritems():
         all_cost = sum([kw.cost for kw in kws])
         if all_cost > 0:
@@ -166,10 +175,15 @@ def get_kw_perf_report(client):
     global kws
     kws = []
     report_downloader = client.GetReportDownloader(version='v201708')
-
+    if input_from_user['report_frequency'] == 'daily':
+        date_range = "YESTERDAY"
+    elif input_from_user['report_frequency'] == 'weekly':
+        date_range = "LAST_7_DAYS"
+    else:
+        date_range = "LAST_30_DAYS"
     report = {
-        'reportName': 'Last 7 days KEYWORDS_PERFORMANCE_REPORT',
-        'dateRangeType': 'LAST_MONTH',
+        'reportName': "{} KEYWORDS_PERFORMANCE_REPORT".format(date_range),
+        'dateRangeType': date_range,
         'reportType': 'KEYWORDS_PERFORMANCE_REPORT',
         'downloadFormat': 'CSV',
         'selector': {
@@ -199,9 +213,15 @@ def get_kw_perf_report(client):
 def get_campaign_avg_position_report(client):
     report_downloader = client.GetReportDownloader(version='v201708')
 
+    if input_from_user['report_frequency'] == 'daily':
+        date_range = "YESTERDAY"
+    elif input_from_user['report_frequency'] == 'weekly':
+        date_range = "LAST_7_DAYS"
+    else:
+        date_range = "LAST_30_DAYS"
     report = {
-        'reportName': 'Last 7 days CAMPAIGN_PERFORMANCE_REPORT',
-        'dateRangeType': 'LAST_MONTH',
+        'reportName': "{} KEYWORDS_PERFORMANCE_REPORT".format(date_range),
+        'dateRangeType': date_range,
         'reportType': 'CAMPAIGN_PERFORMANCE_REPORT',
         'downloadFormat': 'CSV',
         'selector': {
@@ -233,18 +253,15 @@ class KeywordsBidSuggestions(MethodResource):
         os.remove('./report.txt')
         os.remove('./report.csv')
         db_cursor = conn.cursor()
-        for kw in kws_to_change:
-            command = "INSERT INTO keywords(kw_id, kw_name, campaign_name, last_change) VALUES('%s', '%s', '%s', '%s')" % (str(kw[3]), str(kw[2]), str(kw[0]), "2017-10-07")
-            db_cursor.execute(command)
-            conn.commit()
-        for kw in db_dependency:
-            command = "INSERT INTO keywords(kw_id, kw_name, campaign_name, last_change) VALUES('%s', '%s', '%s', '%s')" % (str(kw[3]), str(kw[2]), str(kw[0]), "2017-10-07")
-            db_cursor.execute(command)
-            conn.commit()
-        db_cursor.close()
-        conn.close()
+        now = datetime.datetime.now()
         return_data = []
         for kw_data in kws_to_change + db_dependency['above'] + db_dependency['below']:
+            command = "INSERT INTO keywords(kw_id, kw_name, campaign_name, last_change) " \
+                      "VALUES('{}', '{}', '{}', '{}') " \
+                      "ON CONFLICT (kw_id) DO UPDATE SET last_change = excluded.last_change"\
+                .format(kw_data.id, kw_data.name, input_from_user['campaign_name'], now.strftime("%m/%d/%y"))
+            db_cursor.execute(command)
+            conn.commit()
             return_data.append([input_from_user['campaign_name'], kw_data.ad_group, kw_data.name, kw_data.id,
                                 kw_data.match_type, kw_data.cost / 1000000, kw_data.avg_position, kw_data.roi,
                                 input_from_user['target_roi'], round((kw_data.max_cpc / 1000000), 2), kw_data.bid_change,
