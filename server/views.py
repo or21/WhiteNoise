@@ -151,7 +151,7 @@ def create_keywords_report_data():
                     else:
                         db_dependency['above'].append(kw)
 
-    for location, kws in db_dependency.iteritems():
+    for location, kws in db_dependency.items():
         all_cost = sum([kw.cost for kw in kws])
         if all_cost > 0:
             all_kw_roi = sum([kw.all_conv_value for kw in kws]) / all_cost
@@ -197,14 +197,15 @@ def get_kw_perf_report(client):
         }
     }
 
-    with open('./report.txt', mode='w') as infile:
+    with open('./report.txt', mode='w', encoding='utf8') as infile:
         report_downloader.DownloadReport(
             report, infile, skip_report_header=True, skip_column_header=False,
             skip_report_summary=True, include_zero_impressions=True)
     in_txt = csv.reader(open('./report.txt'), delimiter=',')
-    out_csv = csv.writer(open('./report.csv', 'wb'))
-    out_csv.writerows(in_txt)
-    with open('./report.csv', mode='r') as data:
+    out_csv = csv.writer(open('./report.csv', 'w'))
+    for line in in_txt:
+        out_csv.writerow(line)
+    with open('./report.csv', mode='r', encoding='utf8') as data:
         reader = csv.DictReader(data)
         for row in reader:
             kws.append(row)
@@ -234,10 +235,10 @@ def get_campaign_avg_position_report(client):
         }
     }
 
-    a = report_downloader.DownloadReportAsString(
+    report_results = report_downloader.DownloadReportAsString(
             report, skip_report_header=True, skip_column_header=True,
             skip_report_summary=True, include_zero_impressions=True)
-    return a.split('\n')[0]
+    return report_results
 
 
 class KeywordsBidSuggestions(MethodResource):
@@ -248,7 +249,7 @@ class KeywordsBidSuggestions(MethodResource):
                 input_from_user[key] = request.values[key]
         adwords_client = adwords.AdWordsClient.LoadFromStorage("./googleads.yaml")
         get_kw_perf_report(adwords_client)
-        campaign_avg_position = get_campaign_avg_position_report(adwords_client)
+        campaign_avg_position = get_campaign_avg_position_report(adwords_client).split('\n')[0]
         create_keywords_report_data()
         os.remove('./report.txt')
         os.remove('./report.csv')
