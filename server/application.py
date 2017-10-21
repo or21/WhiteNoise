@@ -6,9 +6,7 @@ import logging
 
 def create_app():
     application = Flask(__name__)
-    #Enable auto reload on file change
     application.jinja_env.auto_reload = True
-    # app.jinja_env.filters['tojsonadvanced'] = lambda x:json.dumps(x, cls=api.ObjectIdEncoder)
     application.config['TEMPLATES_AUTO_RELOAD'] = True
     application.config['TESTING'] = False
     return application
@@ -23,10 +21,8 @@ def init_app(application):
         filename="/tmp/log.log",
         filemode='w'
     )
-
     logging.getLogger().addHandler(logging.StreamHandler())
 
-    API_KEY = "AIzaSyDDCiGvAgO3z82SK0sGztj4C-ehj7Qc8SA"
     api = Api(application)
     api = set_resources(api)
 
