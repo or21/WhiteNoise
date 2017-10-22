@@ -1,7 +1,8 @@
+import logging
 from flask import Flask
 from flask_restful import Api
 from server.views import KeywordsBidSuggestions, WhiteNoise
-import logging
+from .utils import configure_log
 
 
 def create_app():
@@ -14,15 +15,7 @@ def create_app():
 
 def init_app(application):
     #Configure global logging
-    # TODO: create log file by script
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(asctime)s:%(levelname)s:%(name)s:%(message)s',
-        filename="/tmp/log.log",
-        filemode='w'
-    )
-    logging.getLogger().addHandler(logging.StreamHandler())
-
+    configure_log(logging.INFO, "application")
     api = Api(application)
     api = set_resources(api)
 

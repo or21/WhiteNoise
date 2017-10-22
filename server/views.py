@@ -1,12 +1,15 @@
+import datetime
+import csv
+import logging
 from flask_apispec import MethodResource
 from flask import make_response, render_template, request
 from dateutil.relativedelta import relativedelta
 from server.db_utils import select_keywords_from_db, write_keyword_to_db
-from server.adword_utils import get_campaign_report, get_keywords_report
-import datetime
-import csv
+from server.adword_utils import get_campaign_report, get_keywords_report, add_label_to_keyword
+from .utils import configure_log
 
 
+logger = configure_log(logging.INFO, __name__)
 kws = []
 kws_to_change = []
 db_dependency = {}
@@ -14,13 +17,13 @@ now = datetime.datetime.now()
 campaign_avg_position = 0
 date_range = 0
 input_from_user = {
-    'campaign_name': "[S] Shares - NL",
-    'target_roi': 150,
-    'target_position': 2.0,
-    'kw_min_spent': 1,
-    'delicate_mode_bid_adj': "7, 15",
-    'aggressive_mode_caps': "15, 30",
-    'avg_cpa': 3,
+    'campaign_name': "",
+    'target_roi': 0.0,
+    'target_position': 0.0,
+    'kw_min_spent': 1.0,
+    'delicate_mode_bid_adj': (0.0, 0.0),
+    'aggressive_mode_caps': (0.0, 0.0),
+    'avg_cpa': 0.0,
     'output_type': "",
     'account': "",
     'report_frequency': ""
@@ -28,7 +31,7 @@ input_from_user = {
 
 
 class Keyword:
-    def __init__(self, ad_group, name, kw_id, cost, avg_position, max_cpc, match_type, all_conv, impressions):
+    def __init__(self, ad_group, name, kw_id, cost, avg_position, max_cpc, match_type, all_conv, impressions, ad_group_id):
         self.ad_group = ad_group
         self.name = name
         self.id = kw_id
@@ -40,6 +43,7 @@ class Keyword:
         self.impressions = float(impressions)
         self.roi = 0.0
         self.bid_change = 0.0
+        self.ad_group_id = ad_group_id
 
 
 class WhiteNoise(MethodResource):
@@ -90,14 +94,35 @@ def create_keywords_report_data():
     for kw_all in kws:
         kw = Keyword(kw_all['Ad group'], kw_all['Keyword'], kw_all['Keyword ID'], kw_all['Cost'],
                      kw_all['Avg. position'], kw_all['Max. CPC'], kw_all['Match type'], kw_all['All conv. value'],
-                     kw_all['Impressions'])
-        if kw.cost != 0 and kw.all_conv_value != 0:
+                     kw_all['Impressions'], kw_all['Ad group ID'])
+        logger.info("Starting to calculate change for {}".format(kw.name))
+        kw_db_data = select_keywords_from_db(kw.id)
+        kw_db_time = ""
+        date_to_start_from = ""
+        if len(kw_db_data) > 0:
+            logger.info("Found DB record for {}".format(kw.name))
+            kw_db_time = datetime.datetime.combine(kw_db_data[0][0], datetime.time.min)
+            now_ptime = datetime.datetime.strptime(now.strftime("%m/%d/%y"), "%m/%d/%y")
+            if input_from_user['report_frequency'] == 'daily':
+                date_to_start_from = now_ptime + datetime.timedelta(days=-1)
+            elif input_from_user['report_frequency'] == 'weekly':
+                date_to_start_from = now_ptime + datetime.timedelta(days=-7)
+            else:
+                date_to_start_from = now_ptime + relativedelta(months=-1)
+
+        if len(kw_db_data) == 0 or kw_db_time < date_to_start_from:
+            if kw.avg_position < campaign_avg_position:
+                db_dependency['below'].append(kw)
+            else:
+                db_dependency['above'].append(kw)
+            logger.info("{} kw will be calculated in batch mode".format(kw.name))
+        else:
+            if kw.cost < input_from_user['kw_min_spent']:
+                continue
             kw.roi = kw.all_conv_value / kw.cost
             roi_min = input_from_user['target_roi'] - input_from_user['target_roi'] * 0.1
             roi_max = input_from_user['target_roi'] + input_from_user['target_roi'] * 0.1
             if float(roi_max) > float(kw.roi) > float(roi_min):
-                continue
-            if kw.cost < input_from_user['kw_min_spent']:
                 continue
             if 1.5 > kw.avg_position > 1.0 and kw.roi > input_from_user['target_roi']:
                 continue
@@ -109,25 +134,7 @@ def create_keywords_report_data():
 
             kw.bid_change = float(calc_bid_change(selected_mode, kw.roi, kw.avg_position))
             kws_to_change.append(kw)
-        else:
-            kw_db_data = select_keywords_from_db(kw.id)
-            kw_db_time = ""
-            date_to_start_from = ""
-            if len(kw_db_data) > 0:
-                kw_db_time = datetime.datetime.combine(kw_db_data[0][0], datetime.time.min)
-                now_ptime = datetime.datetime.strptime(now.strftime("%m/%d/%y"), "%m/%d/%y")
-                if input_from_user['report_frequency'] == 'daily':
-                    date_to_start_from = now_ptime + datetime.timedelta(days=-1)
-                elif input_from_user['report_frequency'] == 'weekly':
-                    date_to_start_from = now_ptime + datetime.timedelta(days=-7)
-                else:
-                    date_to_start_from = now_ptime + relativedelta(months=-1)
-
-            if kw_db_time < date_to_start_from or len(kw_db_data) == 0:
-                if kw.avg_position < campaign_avg_position:
-                    db_dependency['below'].append(kw)
-                else:
-                    db_dependency['above'].append(kw)
+            logger.info("{} kw was calculated as '{}' mode".format(kw.name, selected_mode))
 
     for location, keywords in db_dependency.items():
         all_cost = sum([kw.cost for kw in keywords])
@@ -147,11 +154,13 @@ def create_keywords_report_data():
         group_bid_change = calc_bid_change(selected_mode, all_kw_roi, all_position)
         for kw in keywords:
             kw.bid_change = group_bid_change
+            logger.info("{} kw was calculated as '{}' mode as part of batch calculation".format(kw.name, selected_mode))
 
 
 class KeywordsBidSuggestions(MethodResource):
     def post(self):
         global input_from_user, campaign_avg_position, date_range, kws, db_dependency
+        kws = []
         db_dependency = {
             'above': [],
             'below': []
@@ -168,7 +177,6 @@ class KeywordsBidSuggestions(MethodResource):
 
         report = get_keywords_report(input_from_user['campaign_name'], date_range)
         report_as_dict = csv.DictReader(report.split('\n'))
-        kws = []
         for row in report_as_dict:
             kws.append(row)
 
@@ -177,11 +185,17 @@ class KeywordsBidSuggestions(MethodResource):
             response.status_code = 404
             return response
 
-        campaign_avg_position = float(get_campaign_report(input_from_user['campaign_name'], date_range, ['AveragePosition']).split('\n')[0])
+        campaign_avg_position = float(get_campaign_report(input_from_user['campaign_name'], date_range, ['AveragePosition']).split('\n')[1])
         create_keywords_report_data()
         return_data = []
 
         for kw_data in kws_to_change + db_dependency['above'] + db_dependency['below']:
+            if 'exaction' in input_from_user['output_type']:
+                if kw_data.bid_change > 0:
+                    change = 'increase'
+                else:
+                    change = 'decrease'
+                add_label_to_keyword(kw_data, change + " " + now.strftime("%m/%d"))
             write_keyword_to_db(kw_data, input_from_user['campaign_name'], now.strftime("%m/%d/%y"))
             return_data.append([input_from_user['campaign_name'],
                                 kw_data.ad_group,
