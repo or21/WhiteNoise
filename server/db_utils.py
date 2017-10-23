@@ -8,11 +8,12 @@ logger = configure_log(logging.INFO, __name__)
 def db_connect():
     try:
         conn_string = "host='localhost' dbname='WhiteNoise' user='postgres' password='Aa123456' port=5000"
-        logger.info("Connecting to database\n	{}".format(conn_string))
+        logger.info("Connecting to database\nhost='localhost' dbname='WhiteNoise' port=5000")
         return psycopg2.connect(conn_string)
 
     except (Exception, psycopg2.DatabaseError) as error:
         logger.error(error)
+
 
 db = db_connect()
 

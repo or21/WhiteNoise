@@ -14,11 +14,9 @@ def create_app():
 
 
 def init_app(application):
-    #Configure global logging
     configure_log(logging.INFO, "application")
     api = Api(application)
     api = set_resources(api)
-
     return api
 
 
