@@ -10,7 +10,7 @@ Goal is to optimize keyword (KW) Bid according to ROI.
   * Create a table called 'keywords' with 4 columns: campaign_name(text), last_change(date), kw_id(text), kw_name(text)
 
 ## USAGE
-  * Flask app is exposed using port 5000
+  * Flask app is exposed using port 2000
 
 ## API
   * / or /WhiteNoise will return the form to fill
