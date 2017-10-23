@@ -1,0 +1,7 @@
+Flask==0.12.2
+flask-apispec==0.4.0
+Flask-RESTful==0.3.6
+psycopg2==2.7.3.1
+suds-jurko==0.6
+googleads==7.0.0
+python-dateutil==2.6.1

@@ -25,7 +25,6 @@ input_from_user = {
     'aggressive_mode_caps': (0.0, 0.0),
     'avg_cpa': 0.0,
     'output_type': "",
-    'account': "",
     'report_frequency': ""
 }
 
@@ -95,12 +94,14 @@ def create_keywords_report_data():
         kw = Keyword(kw_all['Ad group'], kw_all['Keyword'], kw_all['Keyword ID'], kw_all['Cost'],
                      kw_all['Avg. position'], kw_all['Max. CPC'], kw_all['Match type'], kw_all['All conv. value'],
                      kw_all['Impressions'], kw_all['Ad group ID'])
-        logger.info("Starting to calculate change for {}".format(kw.name))
+        message = "Starting to calculate change for {}".format(kw.name)
+        logger.info(message)
         kw_db_data = select_keywords_from_db(kw.id)
         kw_db_time = ""
         date_to_start_from = ""
         if len(kw_db_data) > 0:
-            logger.info("Found DB record for {}".format(kw.name))
+            message = "Found DB record for {}".format(kw.name)
+            logger.info(message)
             kw_db_time = datetime.datetime.combine(kw_db_data[0][0], datetime.time.min)
             now_ptime = datetime.datetime.strptime(now.strftime("%m/%d/%y"), "%m/%d/%y")
             if input_from_user['report_frequency'] == 'daily':
@@ -115,7 +116,8 @@ def create_keywords_report_data():
                 db_dependency['below'].append(kw)
             else:
                 db_dependency['above'].append(kw)
-            logger.info("{} kw will be calculated in batch mode".format(kw.name))
+            message = "{} kw will be calculated in batch mode".format(kw.name)
+            logger.info(message)
         else:
             if kw.cost < input_from_user['kw_min_spent']:
                 continue
@@ -134,7 +136,8 @@ def create_keywords_report_data():
 
             kw.bid_change = float(calc_bid_change(selected_mode, kw.roi, kw.avg_position))
             kws_to_change.append(kw)
-            logger.info("{} kw was calculated as '{}' mode".format(kw.name, selected_mode))
+            message = "{} kw was calculated as '{}' mode".format(kw.name, selected_mode)
+            logger.info(message)
 
     for location, keywords in db_dependency.items():
         all_cost = sum([kw.cost for kw in keywords])
@@ -154,7 +157,8 @@ def create_keywords_report_data():
         group_bid_change = calc_bid_change(selected_mode, all_kw_roi, all_position)
         for kw in keywords:
             kw.bid_change = group_bid_change
-            logger.info("{} kw was calculated as '{}' mode as part of batch calculation".format(kw.name, selected_mode))
+            message = "{} kw was calculated as '{}' mode as part of batch calculation".format(kw.name, selected_mode)
+            logger.info(message)
 
 
 class KeywordsBidSuggestions(MethodResource):
