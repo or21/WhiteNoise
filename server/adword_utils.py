@@ -81,7 +81,7 @@ def add_label_to_keyword(kw, label_text):
 
     try:
         ad_group_criterion_service.mutateLabel(op)
-        message = "Label {} was added to keyword {} on ad group {}".format(label_text, kw.name, kw.ad_group)
+        message = "Label {} was added to keyword {} on ad group {}".format(label_text, kw.name, kw.ad_group).encode('utf-8')
         logger.debug(message)
     except suds.WebFault as detail:
         logger.error(detail)
