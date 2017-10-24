@@ -5,3 +5,4 @@ psycopg2==2.7.3.1
 suds-jurko==0.6
 googleads==7.0.0
 python-dateutil==2.6.1
+flask-SQLAlchemy==2.3.2

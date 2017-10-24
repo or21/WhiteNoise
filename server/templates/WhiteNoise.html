@@ -5,21 +5,21 @@
     <title>WhiteNoise Home page</title>
 </head>
 <body>
-    <form method="post" action="/suggestions">
+    <form id="dataCollection" method="post" action="/suggestions">
         Campaign Name (or ID):
-        <input type="text" name="campaign_name"><br>
+        <input type="text" name="campaign_name" required><br>
         Target ROI:
-        <input type="number" name="target_roi" step="0.01"><br>
+        <input type="number" name="target_roi" step="0.01" required><br>
         Target position:
-        <input type="number" name="target_position" step="0.01"><br>
+        <input type="number" name="target_position" step="0.01" required><br>
         KW Minimum spend for optimization since last bid change:
-        <input type="number" name="kw_min_spent" step="0.01"><br>
+        <input type="number" name="kw_min_spent" step="0.01" required><br>
         Delicate mode Bid Adj (X, Y):
-        <input type="text" name="delicate_mode_bid_adj"><br>
+        <input type="text" name="delicate_mode_bid_adj" required><br>
         Aggressive mode Caps (X, Y):
-        <input type="text" name="aggressive_mode_caps"><br>
+        <input type="text" name="aggressive_mode_caps" required><br>
         AVG CPA (cost per acquisition):
-        <input type="number" name="avg_cpa" step="0.01"><br>
+        <input type="number" name="avg_cpa" step="0.01" required><br>
         Output type:<br>
         <input type="radio" name="output_type" value="report" checked> Report only<br>
         <input type="radio" name="output_type" value="exaction_and_report"> Exaction + Report<br>
@@ -30,5 +30,20 @@
         <br>
         <input type="submit" value="Submit">
     </form>
+<script>
+    var myForm = document.getElementById('dataCollection');
+
+    myFrm.addEventListener('submit', function () {
+    var allInputs = myForm.getElementsByTagName('input');
+
+    for (var i = 0; i < allInputs.length; i++) {
+        var input = allInputs[i];
+
+        if (input.name && !input.value) {
+            input.name = '';
+        }
+    }
+});
+</script>
 </body>
 </html>

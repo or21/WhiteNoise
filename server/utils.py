@@ -1,14 +1,35 @@
-import logging
+import configparser
 
 
-def configure_log(level=None, name=None):
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
+# Read config.ini
+CONFIG = configparser.ConfigParser()
+with open('./server/config.ini', 'r') as f:
+    text = f.read()
+    text = '[root]\n' + text
+CONFIG.read_string(text)
 
-    file_handler = logging.FileHandler('server.log')
-    file_handler.setLevel(logging.INFO)
-    file_format = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s: %(message)s')
-    file_handler.setFormatter(file_format)
-    logger.addHandler(file_handler)
 
-    return logger
+class DictWrapper:
+    def __init__(self, d):
+        self.d = d
+
+    def __getitem__(self, key):
+        return self.d[key] if key in self.d else ''
+
+
+CONFIG = DictWrapper(CONFIG['root'])
+
+
+def handle_user_input(request):
+    input_from_user = {}
+    for key in request.values.keys():
+        input_from_user[key] = request.values[key]
+    input_from_user['target_roi'] = float(input_from_user['target_roi'])
+    input_from_user['target_position'] = float(input_from_user['target_position'])
+    input_from_user['kw_min_spent'] = float(input_from_user['kw_min_spent'])
+    input_from_user['avg_cpa'] = float(input_from_user['avg_cpa'])
+    input_from_user['delicate_mode_bid_adj'] = (float(input_from_user['delicate_mode_bid_adj'].split(',')[0]),
+                                                float(input_from_user['delicate_mode_bid_adj'].split(',')[1]))
+    input_from_user['aggressive_mode_caps'] = (float(input_from_user['aggressive_mode_caps'].split(',')[0]),
+                                               float(input_from_user['aggressive_mode_caps'].split(',')[1]))
+    return input_from_user

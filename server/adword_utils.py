@@ -1,6 +1,5 @@
 import suds
 import logging
-from .utils import configure_log
 from googleads import adwords
 
 
@@ -8,7 +7,6 @@ adwords_client = adwords.AdWordsClient.LoadFromStorage("./googleads.yaml")
 label_service = adwords_client.GetService('LabelService', version='v201708')
 report_downloader = adwords_client.GetReportDownloader(version='v201708')
 ad_group_criterion_service = adwords_client.GetService('AdGroupCriterionService', version='v201708')
-logger = configure_log(logging.INFO, __name__)
 
 
 def get_report(report_type, campaign_name, date_range, fields):
@@ -46,6 +44,7 @@ def get_campaign_report(campaign_name, date_range, fields):
 
 
 def add_label_to_keyword(kw, label_text):
+    logger = logging.getLogger(__name__)
     operations = [
         {
             'operator': 'ADD',
@@ -59,7 +58,8 @@ def add_label_to_keyword(kw, label_text):
     try:
         label_id = label_service.mutate(operations)['value'][0]['id']
     except:
-        logger.info("Label '{}' exists, looking for it's ID".format(label_text))
+        message = "Label '{}' exists, looking for it's ID".format(label_text)
+        logger.info(message)
         service_selector = {
             'fields': ['LabelId'],
             'predicates': {
@@ -81,6 +81,7 @@ def add_label_to_keyword(kw, label_text):
 
     try:
         ad_group_criterion_service.mutateLabel(op)
-        logger.debug("Label {} was added to keyword {} on ad group {}".format(label_text, kw.name, kw.ad_group))
+        message = "Label {} was added to keyword {} on ad group {}".format(label_text, kw.name, kw.ad_group)
+        logger.debug(message)
     except suds.WebFault as detail:
         logger.error(detail)
