@@ -1,23 +1,3 @@
-import configparser
-
-
-# Read config.ini
-CONFIG = configparser.ConfigParser()
-with open('./server/config.ini', 'r') as f:
-    text = f.read()
-    text = '[root]\n' + text
-CONFIG.read_string(text)
-
-
-class DictWrapper:
-    def __init__(self, d):
-        self.d = d
-
-    def __getitem__(self, key):
-        return self.d[key] if key in self.d else ''
-
-
-CONFIG = DictWrapper(CONFIG['root'])
 
 
 def handle_user_input(request):

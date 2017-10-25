@@ -1,16 +1,14 @@
 import logging
+import sys
 from flask import Flask
 from flask_restful import Api
-from .utils import CONFIG
 from flask_sqlalchemy import SQLAlchemy
 
 
 db = SQLAlchemy()
 
 
-class KeywordDb(db.Model):
-    __tablename__ = CONFIG['DB_TABLE']
-
+class Keywords(db.Model):
     kw_id = db.Column(db.String, primary_key=True)
     kw_name = db.Column(db.String)
     last_change = db.Column(db.Date)
@@ -19,13 +17,17 @@ class KeywordDb(db.Model):
 
 def create_app():
     application = Flask(__name__)
-    application.config['SQLALCHEMY_DATABASE_URI'] = CONFIG['DB_URI']
-    application.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = CONFIG['SQLALCHEMY_TRACK_MODIFICATIONS']
     return application
 
 
 def init_app(application):
-    logging.basicConfig(filename=CONFIG['LOG_NAME'], level=logging.DEBUG, format=CONFIG['LOG_FORMAT'])
+    logging.basicConfig(filename=application.config['LOG_NAME'], level=application.config['LOG_LEVEL'], format=application.config['LOG_FORMAT'])
+    if application.config['DEBUG']:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setLevel(application.config['LOG_LEVEL'])
+        formatter = logging.Formatter(application.config['LOG_FORMAT'])
+        handler.setFormatter(formatter)
+        logging.getLogger().addHandler(handler)
 
     api = Api(application)
     api = set_resources(api)
