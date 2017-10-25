@@ -1,8 +1,11 @@
 Flask==0.12.2
 flask-apispec==0.4.0
+Flask-Migrate==2.1.1
 Flask-RESTful==0.3.6
+Flask-Script==2.0.6
+Flask-SQLAlchemy==2.3.2
 psycopg2==2.7.3.1
 suds-jurko==0.6
 googleads==7.0.0
 python-dateutil==2.6.1
-flask-SQLAlchemy==2.3.2
+alembic==0.9.6
