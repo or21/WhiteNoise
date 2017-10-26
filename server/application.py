@@ -8,13 +8,6 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 
-class Keywords(db.Model):
-    kw_id = db.Column(db.String, primary_key=True)
-    kw_name = db.Column(db.String)
-    last_change = db.Column(db.Date)
-    campaign_name = db.Column(db.String)
-
-
 def create_app():
     application = Flask(__name__)
     return application

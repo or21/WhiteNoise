@@ -60,7 +60,7 @@ def create_keywords_report_data(kws, input_from_user, campaign_avg_position, now
     global input_data
     input_data = input_from_user
     kws_to_change = []
-    db_dependency = {
+    keywords_bids_as_group = {
         'above': [],
         'below': []
     }
@@ -83,9 +83,9 @@ def create_keywords_report_data(kws, input_from_user, campaign_avg_position, now
 
         if (not kw_db_data) or (kw_db_time < date_to_start_from):
             if kw.avg_position < campaign_avg_position:
-                db_dependency['below'].append(kw)
+                keywords_bids_as_group['below'].append(kw)
             else:
-                db_dependency['above'].append(kw)
+                keywords_bids_as_group['above'].append(kw)
             message = "{} kw will be calculated in batch mode".format(kw.name).encode('utf-8')
             logger.info(message)
         else:
@@ -109,7 +109,8 @@ def create_keywords_report_data(kws, input_from_user, campaign_avg_position, now
             message = "{} kw was calculated as '{}' mode".format(kw.name, selected_mode).encode('utf-8')
             logger.info(message)
 
-    for location, keywords in db_dependency.items():
+    # Optimize bid as a Group
+    for location, keywords in keywords_bids_as_group.items():
         all_cost = sum([kw.cost for kw in keywords])
         if all_cost > 0:
             all_kw_roi = sum([kw.all_conv_value for kw in keywords]) / all_cost
@@ -130,5 +131,5 @@ def create_keywords_report_data(kws, input_from_user, campaign_avg_position, now
             message = "{} kw was calculated as '{}' mode as part of batch calculation".format(kw.name, selected_mode).encode('utf-8')
             logger.info(message)
 
-    return kws_to_change, db_dependency
+    return kws_to_change, keywords_bids_as_group
 

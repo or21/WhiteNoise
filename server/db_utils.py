@@ -1,5 +1,5 @@
 from server import db
-from .application import Keywords
+from .models import Keywords
 
 
 def write_keyword_to_db(kw_data, campaign_name, date):

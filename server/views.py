@@ -12,7 +12,7 @@ from .bid_calculations import create_keywords_report_data
 logger = logging.getLogger(__name__)
 kws = []
 kws_to_change = []
-db_dependency = {}
+keywords_bids_as_group = {}
 now = datetime.datetime.now()
 campaign_avg_position = 0
 date_range = 0
@@ -30,7 +30,7 @@ class WhiteNoise(MethodResource):
 
 class KeywordsBidSuggestions(MethodResource):
     def post(self):
-        global campaign_avg_position, date_range, kws, db_dependency, kws_to_change
+        global campaign_avg_position, date_range, kws, keywords_bids_as_group, kws_to_change
         kws = []
         input_from_user = handle_user_input(request)
         date_range = dates_map[input_from_user['report_frequency']]
@@ -46,16 +46,16 @@ class KeywordsBidSuggestions(MethodResource):
             return response
 
         campaign_avg_position = float(get_campaign_report(input_from_user['campaign_name'], date_range, ['AveragePosition']).split('\n')[1])
-        kws_to_change, db_dependency = create_keywords_report_data(kws, input_from_user, campaign_avg_position, now)
-        return_data = []
+        kws_to_change, keywords_bids_as_group = create_keywords_report_data(kws, input_from_user, campaign_avg_position, now)
 
-        for kw_data in kws_to_change + db_dependency['above'] + db_dependency['below']:
+        return_data = []
+        for kw_data in kws_to_change + keywords_bids_as_group['above'] + keywords_bids_as_group['below']:
             if 'exaction' in input_from_user['output_type']:
                 if kw_data.bid_change > 0:
                     change = 'increase'
                 else:
                     change = 'decrease'
-                add_label_to_keyword(kw_data, change + " " + now.strftime("%m/%d"))
+                add_label_to_keyword(kw_data, "{} {}".format(change, now.strftime("%m/%d")))
             write_keyword_to_db(kw_data, input_from_user['campaign_name'], now.strftime("%m/%d/%y"))
             return_data.append([input_from_user['campaign_name'],
                                 kw_data.ad_group,
